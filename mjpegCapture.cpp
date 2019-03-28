@@ -1,5 +1,6 @@
 #include "mjpegCapture.h"
 #include "httpReader.h"
+#include "httpClient.h"
 #include <opencv2/opencv.hpp>
 #include <pthread.h>
 
@@ -17,7 +18,6 @@ void MJpegCapture::readFrame(HttpReader& reader, const std::string& boundary) {
 	} while (token.isDelimitor);
 
 	int length = atoi(token.value.c_str());
-	printf("frame length: %d\n", length);
 
 	// X-Timestampまで読み飛ばし
 	do {
@@ -30,7 +30,6 @@ void MJpegCapture::readFrame(HttpReader& reader, const std::string& boundary) {
 	} while (token.isDelimitor);
 
 	float timestamp = atof(token.value.c_str());
-	printf("frame timestamp: %f\n", timestamp);
 
 	reader.readNextToken(); // ¥r
 	if (token.value[0] != '\r') {
@@ -56,16 +55,22 @@ void MJpegCapture::readFrame(HttpReader& reader, const std::string& boundary) {
 		return;
 	}
 
-	uint8_t* buf = new uint8_t[length];
-	reader.readBuffer(buf, length);
+	if (mTmpBuffer == NULL || mTmpBufferLen < length) {
+		delete[] mTmpBuffer;
+		size_t allocSize = length * 1.2;
+		mTmpBuffer = new uint8_t[allocSize];
+		if (mTmpBuffer) {
+			mTmpBufferLen = allocSize;
+		}
+	}
 
-	cv::Mat rawData( 1, length, CV_8UC1, (void*)buf);
-	cv::Mat decodedImage = cv::imdecode( rawData, 0);
+	reader.readBuffer(mTmpBuffer, length);
+
+	cv::Mat rawData( 1, length, CV_8UC1, (void*)mTmpBuffer);
+	cv::Mat decodedImage = cv::imdecode( rawData, 1);
 	if (!decodedImage.empty()) {
 		mCurImg = decodedImage;
 	}
-
-	delete[] buf;
 
 	reader.readNextToken(); // ¥r
 	if (token.value[0] != '\r') {
@@ -134,6 +139,10 @@ void MJpegCapture::startDecoding(HttpReader& reader) {
 	} while (token.value != boundary);
 
 	do {
+		if (mStopRequest) {
+			break;
+		}
+
 		readFrame(reader, boundary);
 
 		while (token.value != boundary) {
@@ -142,14 +151,39 @@ void MJpegCapture::startDecoding(HttpReader& reader) {
 		}
 
 	} while(true);
+
+	printf("exit decoding\n");
 }
 
-MJpegCapture::MJpegCapture(InputStream& stream) : mStream(stream) {
+MJpegCapture::MJpegCapture() : mTmpBuffer(NULL), mTmpBufferLen(0), mStopRequest(false) {
 }
 
-void MJpegCapture::start() {
-	pthread_t pt;
-	pthread_create(&pt, NULL, &decodeThread, this);
+MJpegCapture::~MJpegCapture() {
+	delete[] mTmpBuffer;
+}
+
+int MJpegCapture::start(const char* ip, int port, const char* uri) {
+	mStream = HttpClient::request(ip, port, uri);
+	if (mStream == NULL) {
+		return -1;
+	}
+
+	mStopRequest = false;
+	pthread_create(&mThread, NULL, &decodeThread, this);
+
+	return 0;
+}
+
+void MJpegCapture::stop() {
+	if (mStopRequest) {
+		return;
+	}
+
+	mStopRequest = true;
+	pthread_join(mThread, NULL);
+
+	delete mStream;
+	mStream = NULL;
 }
 
 MJpegCapture& MJpegCapture::operator >> (cv::Mat& image) {
@@ -160,7 +194,7 @@ MJpegCapture& MJpegCapture::operator >> (cv::Mat& image) {
 void* MJpegCapture::decodeThread(void* arg) {
 	MJpegCapture* self = static_cast<MJpegCapture*>(arg);
 
-	HttpReader reader(self->mStream);
+	HttpReader reader(*self->mStream);
 	self->startDecoding(reader);
 
 	return NULL;

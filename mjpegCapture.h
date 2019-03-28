@@ -2,13 +2,16 @@
 
 #include "inputStream.h"
 #include <opencv2/core.hpp>
+#include <pthread.h>
 
 class HttpReader;
 class MJpegCapture {
 public:
-	MJpegCapture(InputStream& stream);
+	MJpegCapture();
+	~MJpegCapture();
 
-	void start();
+	int start(const char* ip, int port, const char* uri);
+	void stop();
 
 	MJpegCapture& operator >> (cv::Mat& image);
 
@@ -17,6 +20,10 @@ private:
 	void readFrame(HttpReader& reader, const std::string& boundary);
 	void startDecoding(HttpReader& reader);
 
-	InputStream& mStream;
+	InputStream* mStream;
 	cv::Mat mCurImg;
+	uint8_t* mTmpBuffer;
+	size_t mTmpBufferLen;
+	pthread_t mThread;
+	volatile bool mStopRequest;
 };

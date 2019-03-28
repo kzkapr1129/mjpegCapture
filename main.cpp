@@ -1,15 +1,11 @@
-#include "inputStreamFile.h"
-#include "httpReader.h"
-#include "httpClient.h"
 #include "mjpegCapture.h"
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <unistd.h>
 
 int main() {
-	Response* response = HttpClient::request("192.168.11.2", 8080, "/?action=stream");
-	MJpegCapture cap(*response);
-	cap.start();
+	MJpegCapture cap;
+	cap.start("192.168.11.6", 8080, "/?action=stream");
 
 	while (true) {
 		cv::Mat frame;
@@ -22,8 +18,14 @@ int main() {
 		}
 
 		cv::imshow("frame", frame);
-		cv::waitKey(1);
+		int key = cv::waitKey(1);
+		if (key == 27) {
+			break;
+		}
 	}
 
+	cap.stop();
+
+	printf("exit main\n");
 	return 0;
 }
