@@ -12,6 +12,7 @@ public:
 
 	int start(const char* ip, int port, const char* uri);
 	void stop();
+	bool isRunning() const;
 
 	MJpegCapture& operator >> (cv::Mat& image);
 
@@ -25,5 +26,8 @@ private:
 	uint8_t* mTmpBuffer;
 	size_t mTmpBufferLen;
 	pthread_t mThread;
+	pthread_mutex_t mMutex;
+	pthread_cond_t mCond;
+	volatile bool mIsRunning;
 	volatile bool mStopRequest;
 };

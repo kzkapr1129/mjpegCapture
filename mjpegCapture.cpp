@@ -3,6 +3,7 @@
 #include "httpClient.h"
 #include <opencv2/opencv.hpp>
 #include <pthread.h>
+#include <sys/time.h>
 
 void MJpegCapture::readFrame(HttpReader& reader, const std::string& boundary) {
 	const Token& token = reader.token();
@@ -156,10 +157,15 @@ void MJpegCapture::startDecoding(HttpReader& reader) {
 }
 
 MJpegCapture::MJpegCapture() : mTmpBuffer(NULL), mTmpBufferLen(0), mStopRequest(false) {
+	pthread_cond_init(&mCond, NULL);
+	pthread_mutex_init(&mMutex, NULL);
 }
 
 MJpegCapture::~MJpegCapture() {
-	delete[] mTmpBuffer;
+	stop();
+
+	pthread_mutex_destroy(&mMutex);
+	pthread_cond_destroy(&mCond);
 }
 
 int MJpegCapture::start(const char* ip, int port, const char* uri) {
@@ -169,7 +175,24 @@ int MJpegCapture::start(const char* ip, int port, const char* uri) {
 	}
 
 	mStopRequest = false;
-	pthread_create(&mThread, NULL, &decodeThread, this);
+	int ret = pthread_create(&mThread, NULL, &decodeThread, this);
+	if (ret) {
+		return -1;
+	}
+
+	pthread_mutex_lock(&mMutex);
+
+	timespec timeout;
+	timeval now;
+	gettimeofday(&now, NULL);
+	timeout.tv_sec = now.tv_sec + 5;
+	timeout.tv_nsec = now.tv_usec * 1000;
+
+	ret = pthread_cond_timedwait(&mCond, &mMutex, &timeout);
+	if (ret == ETIMEDOUT) {
+		// IGNORE
+	}
+	pthread_mutex_unlock(&mMutex);
 
 	return 0;
 }
@@ -186,6 +209,10 @@ void MJpegCapture::stop() {
 	mStream = NULL;
 }
 
+bool MJpegCapture::isRunning() const {
+	return mIsRunning;
+}
+
 MJpegCapture& MJpegCapture::operator >> (cv::Mat& image) {
 	image = mCurImg;
 	return *this;
@@ -193,9 +220,20 @@ MJpegCapture& MJpegCapture::operator >> (cv::Mat& image) {
 
 void* MJpegCapture::decodeThread(void* arg) {
 	MJpegCapture* self = static_cast<MJpegCapture*>(arg);
+	self->mIsRunning = true;
 
 	HttpReader reader(*self->mStream);
-	self->startDecoding(reader);
 
+	pthread_mutex_lock(&self->mMutex);
+	pthread_cond_broadcast(&self->mCond);
+	pthread_mutex_unlock(&self->mMutex);
+
+	try {
+		self->startDecoding(reader);
+	} catch (...) {
+
+	}
+
+	self->mIsRunning = false;
 	return NULL;
 }
