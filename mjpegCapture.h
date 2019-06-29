@@ -18,7 +18,7 @@ public:
 
 private:
 	static void* decodeThread(void* arg);
-	void startDecoding(HttpReader& reader);
+	void doDecoding(HttpReader& reader);
 	void readFrame(HttpReader& reader, const std::string& boundary);
 
 	InputStream* mStream;

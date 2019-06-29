@@ -33,8 +33,8 @@ void Response::close() {
 size_t Response::read(uint8_t* buf, size_t size) {
 	ssize_t ret;
 	for (int retry = 0; retry < 3; retry++) {
-		ret = ::read(mSocket, buf, size);
-		if (ret < 0) {
+		ret = ::recv(mSocket, buf, size, MSG_WAITALL);
+		if (ret <= 0) {
 			return 0;
 		}
 
@@ -54,6 +54,14 @@ Response* HttpClient::request(const std::string& ip, int port, const std::string
 		return NULL;
 	}
 
+	// 送信タイムアウトの設定
+	const timeval sock_send_timeout = { .tv_sec = 5, .tv_usec = 0};
+	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &sock_send_timeout, sizeof(sock_send_timeout));
+
+	// 受信タイムアウトの設定
+	const timeval sock_recv_timeout = { .tv_sec = 5, .tv_usec = 0};
+	int ret = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&sock_recv_timeout, sizeof(sock_recv_timeout));
+
 	sockaddr_in client_addr;
 	memset(&client_addr, 0, sizeof(client_addr));
 	client_addr.sin_family = PF_INET;
@@ -67,7 +75,7 @@ Response* HttpClient::request(const std::string& ip, int port, const std::string
 
 	std::string requestMessage = "GET " + uri + " HTTP/1.1\r\n\r\n";
 
-	size_t len = write(sock, requestMessage.c_str(), requestMessage.length());
+	size_t len = send(sock, requestMessage.c_str(), requestMessage.length(), 0);
 	if (len < 0) {
 		close(sock);
 		return NULL;

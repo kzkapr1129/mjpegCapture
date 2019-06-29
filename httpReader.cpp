@@ -77,7 +77,7 @@ int HttpReader::readBuffer(uint8_t* buf, int size) {
 		if (mOffset < 0 || mBufLen <= mOffset) {
 			size_t n = mStream.read(mTmpBuffer, BUF_SIZE);
 			if (n <= 0) {
-				return len;
+				throw EofException();
 			}
 
 			mBufLen = n;

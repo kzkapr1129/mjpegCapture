@@ -31,11 +31,9 @@ int MJpegCapture::start(const char* ip, int port, const char* uri) {
 
 	pthread_mutex_lock(&mMutex);
 
-	timespec timeout;
 	timeval now;
 	gettimeofday(&now, NULL);
-	timeout.tv_sec = now.tv_sec + 5;
-	timeout.tv_nsec = now.tv_usec * 1000;
+	const timespec timeout = {.tv_sec = now.tv_sec + 5, .tv_nsec = now.tv_usec * 1000};
 
 	ret = pthread_cond_timedwait(&mCond, &mMutex, &timeout);
 	if (ret == ETIMEDOUT) {
@@ -73,21 +71,19 @@ void* MJpegCapture::decodeThread(void* arg) {
 
 	HttpReader reader(*self->mStream);
 
-	pthread_mutex_lock(&self->mMutex);
-	pthread_cond_broadcast(&self->mCond);
-	pthread_mutex_unlock(&self->mMutex);
-
 	try {
-		self->startDecoding(reader);
+		self->doDecoding(reader);
+	} catch (EofException e) {
+		self->mCurImg.release();
 	} catch (...) {
-
+		self->mCurImg.release();
 	}
 
 	self->mIsRunning = false;
 	return NULL;
 }
 
-void MJpegCapture::startDecoding(HttpReader& reader) {
+void MJpegCapture::doDecoding(HttpReader& reader) {
 	const Token& token = reader.token();
 
 	// 1行目のHTTPヘッダだけ読み込む
@@ -133,6 +129,14 @@ void MJpegCapture::startDecoding(HttpReader& reader) {
 	do {
 		reader.readNextToken();
 	} while (token.value != boundary);
+
+	// 初回のフレーム読み込み
+	readFrame(reader, boundary);
+
+	// 初回フレームの読み込み完了を通知
+	pthread_mutex_lock(&mMutex);
+	pthread_cond_broadcast(&mCond);
+	pthread_mutex_unlock(&mMutex);
 
 	do {
 		if (mStopRequest) {

@@ -21,8 +21,7 @@ int main(int argc, char* argv[]) {
 		cap >> frame;
 
 		if (frame.empty()) {
-			sleep(1);
-			continue;
+			break;
 		}
 
 		cv::imshow("frame", frame);
