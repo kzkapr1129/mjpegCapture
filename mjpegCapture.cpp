@@ -1,4 +1,5 @@
 #include "mjpegCapture.h"
+#include "inputStream.h"
 #include "httpReader.h"
 #include "httpClient.h"
 #include <opencv2/opencv.hpp>

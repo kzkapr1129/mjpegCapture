@@ -1,9 +1,9 @@
 #pragma once
 
-#include "inputStream.h"
 #include <opencv2/core.hpp>
 #include <pthread.h>
 
+class InputStream;
 class HttpReader;
 class MJpegCapture {
 public:
