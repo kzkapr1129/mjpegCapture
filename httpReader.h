@@ -1,10 +1,8 @@
 #pragma once
 
+#include "common.h"
 #include "inputStream.h"
 #include <string>
-
-struct EofException {
-};
 
 struct Token {
 	std::string value;

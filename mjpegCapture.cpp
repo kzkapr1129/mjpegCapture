@@ -15,6 +15,8 @@ MJpegCapture::~MJpegCapture() {
 
 	pthread_mutex_destroy(&mMutex);
 	pthread_cond_destroy(&mCond);
+
+	delete[] mTmpBuffer;
 }
 
 int MJpegCapture::start(const char* ip, int port, const char* uri) {
@@ -74,6 +76,8 @@ void* MJpegCapture::decodeThread(void* arg) {
 	try {
 		self->doDecoding(reader);
 	} catch (EofException e) {
+		self->mCurImg.release();
+	} catch (OOMException e) {
 		self->mCurImg.release();
 	} catch (...) {
 		self->mCurImg.release();
@@ -212,6 +216,8 @@ void MJpegCapture::readFrame(HttpReader& reader, const std::string& boundary) {
 		mTmpBuffer = new uint8_t[allocSize];
 		if (mTmpBuffer) {
 			mTmpBufferLen = allocSize;
+		} else {
+			throw OOMException();
 		}
 	}
 
