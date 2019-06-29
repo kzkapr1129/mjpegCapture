@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		cv::imshow("frame", frame);
-		int key = cv::waitKey(1);
+		int key = cv::waitKey(100);
 		if (key == 27) {
 			break;
 		}
