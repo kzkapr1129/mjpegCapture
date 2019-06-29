@@ -18,8 +18,8 @@ public:
 
 private:
 	static void* decodeThread(void* arg);
-	void readFrame(HttpReader& reader, const std::string& boundary);
 	void startDecoding(HttpReader& reader);
+	void readFrame(HttpReader& reader, const std::string& boundary);
 
 	InputStream* mStream;
 	cv::Mat mCurImg;
