@@ -135,13 +135,23 @@ void MJpegCapture::doDecoding(HttpReader& reader) {
 		reader.readNextToken();
 	} while (token.value != boundary);
 
-	// 初回のフレーム読み込み
-	readFrame(reader, boundary);
+	bool success_first = true;
+	try {
+		// 初回のフレーム読み込み
+		readFrame(reader, boundary);
+	} catch (...) {
+		success_first = false;
+	}
 
 	// 初回フレームの読み込み完了を通知
 	pthread_mutex_lock(&mMutex);
 	pthread_cond_broadcast(&mCond);
 	pthread_mutex_unlock(&mMutex);
+
+	if (!success_first) {
+		// 初回フレームの読み込み失敗
+		return;
+	}
 
 	do {
 		if (mStopRequest) {
